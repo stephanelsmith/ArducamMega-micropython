@@ -1,0 +1,35 @@
+
+
+ampy.exe -p COM9 put arducam
+python -m serial.tools.miniterm COM9 115200
+
+
+from time import sleep_ms
+from machine import Pin, SPI
+import binascii
+import os
+
+from cam import *
+
+from camera import Camera
+c = Camera(spi, cs, debug_information=True)
+c.resolution = '640x480'
+c.set_brightness_level(c.BRIGHTNESS_PLUS_4)
+c.set_contrast(c.CONTRAST_MINUS_3)
+c.capture_jpg()
+sleep_ms(50)
+c.saveJPG('image.jpg')
+
+
+f = open('image.jpg', 'rb')
+bs = f.read()
+f.close()
+qs = binascii.b2a_base64(bs)
+f = open('image.txt', 'w')
+f.write(qs)
+f.close()
+
+# ampy.exe -p COM9 get image.txt image.txt
+
+
+

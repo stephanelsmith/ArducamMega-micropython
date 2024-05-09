@@ -5,6 +5,7 @@ A micropython library for driving the Arducam MEGA Spi.
 
 ## :raised_hands: Acknowledgements and References
 - [Arducam_Mega](https://github.com/ArduCAM/Arducam_Mega) the official c/c++ based SDK.
+    - [ArducamCamera.c](https://github.com/ArduCAM/Arducam_Mega/blob/main/src/Arducam/ArducamCamera.c), the main c file.
 - [Arducam Mega SDK Docs](https://www.arducam.com/docs/arducam-mega/arducam-mega-getting-started/index.html)
     - [Communication protocol](https://www.arducam.com/docs/arducam-mega/arducam-mega-getting-started/packs/HostCommunicationProtocol.html)
     - [Arducam Wiki](https://docs.arducam.com/Arduino-SPI-camera/MEGA-SPI/MEGA-SPI-Camera/) (less helpful)

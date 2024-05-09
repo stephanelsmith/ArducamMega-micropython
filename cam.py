@@ -17,7 +17,12 @@ async def main():
                                cs  = cs,
                                ) as arducam:
                 await asyncio.sleep(1)
-                await arducam.whoami()
+
+                r = await arducam.whoami()
+                print(r)
+
+                r = await arducam.capture()
+                print(r)
 
     finally:
         spi.deinit()

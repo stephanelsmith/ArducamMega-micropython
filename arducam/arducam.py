@@ -19,6 +19,8 @@ _SENSOR_3MP_2 = const(0x84)
 # CAMERA RESET REG
 _CAM_REG_SENSOR_RESET  = const(0X07)
 _CAM_SENSOR_RESET_ENABLE = const(0x40)
+_CAM_REG_SENSOR_STATE = const(0x44)
+_CAM_REG_SENSOR_STATE_IDLE = const(0x02)
 
 _CAM_REG_DEBUG_DEVICE_ADDRESS = const(0x0A)
 _CAM_DEVICE_ADDRESS = const(0x78)
@@ -47,6 +49,9 @@ _CAM_REG_CAPTURE_RESOLUTION = const(0x21)
 _RESOLUTION_320X240 = const(0X01) # CAM_IMAGE_MODE_QVGA
 _RESOLUTION_640X480 = const(0X02) # CAM_IMAGE_MODE_VGA
 _RESOLUTION_800X600 = const(0x03) # CAM_IMAGE_MODE_SVGA
+_RESOLUTION_96X96 = const(0X0a)
+_RESOLUTION_128X128 = const(0X0b)
+_RESOLUTION_320X320 = const(0X0c)
 
 # video mode
 _CAM_SET_VIDEO_MODE   = const(0x80)
@@ -78,8 +83,11 @@ class ArduCam():
     def __init__(self, spi,
                        cs,
                        ):
-		self.spi = spi
-		self.cs  = cs
+        self.spi = spi
+        self.cs  = cs
+
+        # re-use this scratch bytearray to avoid extraneous allocations in read/write functions
+        self.scratch  = memoryview(bytearray(8))
 
     async def start(self, timeout = 2000):
         await self.connect()
@@ -111,12 +119,8 @@ class ArduCam():
             await asyncio.sleep_ms(10)
         print('connected to arducam {}'.format(r))
 
-        # "cameraBegin"
-        # writeReg(camera, CAM_REG_DEBUG_DEVICE_ADDRESS, camera->myCameraInfo.deviceAddress);
-        # self.write(_CAM_REG_DEBUG_DEVICE_ADDRESS, _CAM_DEVICE_ADDRESS)
-
     async def whoami(self):
-        r = self.read(reg = _CAM_REG_SENSOR_ID)
+        r = await self.read(reg = _CAM_REG_SENSOR_ID)
         if r == _SENSOR_5MP_1:
             return b'5MP'
         elif r == _SENSOR_3MP_1:
@@ -127,44 +131,54 @@ class ArduCam():
             return b'3MP'
         return r
 
-    async def reset(self):
-        # writeReg(camera, CAM_REG_SENSOR_RESET, CAM_SENSOR_RESET_ENABLE);
-        self.write(_CAM_REG_SENSOR_RESET, _CAM_SENSOR_RESET_ENABLE)
-
     async def capture(self):
 
+        # writeReg(camera, CAM_REG_SENSOR_RESET, CAM_SENSOR_RESET_ENABLE);
+        await self.write(_CAM_REG_SENSOR_RESET, _CAM_SENSOR_RESET_ENABLE)
+
+        # writeReg(camera, CAM_REG_DEBUG_DEVICE_ADDRESS, camera->myCameraInfo.deviceAddress);
+        await self.write(_CAM_REG_DEBUG_DEVICE_ADDRESS, _CAM_DEVICE_ADDRESS)
+
         # filter color (special)
-        self.write(_CAM_REG_COLOR_EFFECT_CONTROL, _SPECIAL_NORMAL)
+        await self.write(_CAM_REG_COLOR_EFFECT_CONTROL, _SPECIAL_NORMAL)
+        await self.waitidle()
 
         # brightness
-        self.write(_CAM_REG_BRIGHTNESS_CONTROL, _BRIGHTNESS_PLUS_4)
+        await self.write(_CAM_REG_BRIGHTNESS_CONTROL, _BRIGHTNESS_PLUS_4)
+        await self.waitidle()
 
         # contrast
-        self.write(_CAM_REG_CONTRAST_CONTROL, _CONTRAST_MINUS_3)
+        await self.write(_CAM_REG_CONTRAST_CONTROL, _CONTRAST_MINUS_3)
+        await self.waitidle()
 
         # writeReg(camera, CAM_REG_FORMAT, pixel_format); // set the data format
-        # self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_RGB565)
-        self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_JPG)
+        # await self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_RGB565)
+        await self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_JPG)
+        await self.waitidle()
 
         # writeReg(camera, CAM_REG_CAPTURE_RESOLUTION, CAM_SET_CAPTURE_MODE | mode);
-        self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_320X240 | _CAM_SET_CAPTURE_MODE)
-        # self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_640X480 | _CAM_SET_CAPTURE_MODE)
+        await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_96X96 | _CAM_SET_CAPTURE_MODE)
+        # await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_320X240 | _CAM_SET_CAPTURE_MODE)
+        # await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_640X480 | _CAM_SET_CAPTURE_MODE)
+        await self.waitidle()
 
         # void cameraSetCapture
         # clear fifo
         # writeReg(camera, ARDUCHIP_FIFO, FIFO_CLEAR_ID_MASK);
-        self.write(_ARDUCHIP_FIFO, _FIFO_CLEAR_ID_MASK)
+        await self.write(_ARDUCHIP_FIFO, _FIFO_CLEAR_ID_MASK)
+        await self.waitidle()
 
         # start capture
         # writeReg(camera, ARDUCHIP_FIFO, FIFO_START_MASK);
-        self.write(_ARDUCHIP_FIFO, _FIFO_START_MASK)
+        await self.write(_ARDUCHIP_FIFO, _FIFO_START_MASK)
+        await self.waitidle()
 
         # wait
         # while (getBit(camera, ARDUCHIP_TRIG, CAP_DONE_MASK) == 0)
             # ;
         for x in range(30):
-            r = self.read(_ARDUCHIP_TRIG)
-            print('0x{:02X} {}'.format(r, r & _CAP_DONE_MASK))
+            r = await self.read(_ARDUCHIP_TRIG)
+            # print('0x{:02X} {}'.format(r, r & _CAP_DONE_MASK))
             if r & _CAP_DONE_MASK:
                 break
             await asyncio.sleep_ms(100)
@@ -172,7 +186,7 @@ class ArduCam():
         # camera->receivedLength = readFifoLength(camera);
         # camera->totalLength    = camera->receivedLength;
         # camera->burstFirstFlag = 0;
-        read_size = self.read_fifo_length()
+        read_size = await self.read_fifo_length()
         print('read_size:{}'.format(read_size))
 
         raw = bytearray(read_size)
@@ -191,13 +205,24 @@ class ArduCam():
             self.cs(1)
         print('burst read: {}'.format(len(raw)))
 
-        with open('image.txt', 'w') as f:
-            f.write(binascii.b2a_base64(raw))
+        stride = 64 
+        for i in range(0,len(raw), stride):
+            chunk = mv[i:i+stride]
+            print('{:<10} '.format(i), end='')
+            for j in range(len(chunk)):
+                print('{:02X} '.format(chunk[j]), end='')
+                # if chunk[j] == 0xff:
+                    # print('*')
+            print()
+
+
+        # with open('image.txt', 'w') as f:
+            # f.write(binascii.b2a_base64(raw))
 
         # TODO
         # https://github.com/ArduCAM/Arducam_Mega/blob/main/examples/ArduinoUNO/capture2SD/capture2SD.ino
 
-    def read_fifo_length(self):
+    async def read_fifo_length(self):
         # uint32_t cameraReadFifoLength(ArducamCamera* camera)
         # uint32_t len1, len2, len3, length = 0;
         # len1   = readReg(camera, FIFO_SIZE1);
@@ -205,64 +230,58 @@ class ArduCam():
         # len3   = readReg(camera, FIFO_SIZE3);
         # length = ((len3 << 16) | (len2 << 8) | len1) & 0xffffff;
         # return length;
-        bs = bytearray(4)
-        bs[0] = self.read(_FIFO_SIZE1)
-        bs[1] = self.read(_FIFO_SIZE2)
-        bs[2] = self.read(_FIFO_SIZE3)
-        print('{} 0x{:02x} 0x{:02x} 0x{:02x}  little:{} big:{}'.format(bs, bs[2], bs[1], bs[0], int.from_bytes(bs, 'little'), int.from_bytes(bs, 'big')))
+        bs = self.scratch[3:7] # read uses lower scratch bytes
+        bs[0] = await self.read(_FIFO_SIZE1)
+        bs[1] = await self.read(_FIFO_SIZE2)
+        bs[2] = await self.read(_FIFO_SIZE3)
+        # print('{} 0x{:02x} 0x{:02x} 0x{:02x}  little:{} big:{}'.format(bs, bs[2], bs[1], bs[0], int.from_bytes(bs, 'little'), int.from_bytes(bs, 'big')))
         return int.from_bytes(bs, 'little')
 
-    def read(self, reg):
-        tx = bytes([
-            0x7f & reg,  # reg
-            0x00,         # dummy
-            0x00,         # result
-        ])
-        rx = bytearray(len(tx))
+    async def read(self, reg, dowait=True):
+        # tx = bytes([
+            # 0x7f & reg,  # reg
+            # 0x00,         # dummy
+            # 0x00,         # result
+        # ])
+        # rx = bytearray(len(tx))
+        rxtx = self.scratch[0:3]
+        rxtx[0] = 0x7f & reg
+        rxtx[1] = 0
+        rxtx[2] = 0
         try:
             self.cs(0)
-            self.spi.write_readinto(tx, rx)
+            self.spi.write_readinto(rxtx, rxtx)
+            r = rxtx[2]
         finally:
             self.cs(1)
-        return rx[2]
+        if dowait:
+            await self.waitidle()
+        return r
 
-    def write(self, reg, v):
-        tx = bytes([0x80 | reg, v])
+    async def write(self, reg, v):
+        # tx = bytes([0x80 | reg, v])
+        tx = self.scratch[:2]
+        tx[0] = 0x80 | reg
+        tx[1] = v
         try:
             self.cs(0)
             self.spi.write(tx)
         finally:
             self.cs(1)
+        await self.waitidle()
 
-# async def main():
-    # # read type
-    # r = read(reg = _REG_WHOAMI)
-    # print('WHOAMI:{:02X}'.format(r))
-
-    # r = write_reg(reg = _REG_BASIC_CFG, 
-                  # v   = _PIXEL_FORMAT_JPG)
-    # print('BASIC_CFG:{:02X}'.format(r))
-
-    # r = write_reg(reg = _REG_RESOLUTION, 
-                  # v   = _RESOLUTION_640X480)
-    # print('REG_RESOLUTION:{:02X}'.format(r))
-
-    # # clear fifo flag
-    # write(reg = _REG_MEMORY_CTRL,
-          # v   = _CLEAR_MEMORY)
-
-    # # start capture
-    # write(reg = _REG_MEMORY_CTRL,
-          # v   = _START_PICTURES)
-
-    # # wait
-    # done = False
-    # for x in range(10):
-        # r = read(reg = ARDUCHIP_TRIG)
-        # print('ARDUCHIP_TRIG:{:02X}'.format(r))
-        # if r & CAP_DONE_MASK:
-            # break
-        # await asyncio.sleep_ms(200)
-
+    async def waitidle(self):
+        # void cameraWaitI2cIdle(ArducamCamera* camera)
+        # {
+            # while ((readReg(camera, CAM_REG_SENSOR_STATE) & 0X03) != CAM_REG_SENSOR_STATE_IDLE) {
+                # arducamDelayMs(2);
+            # }
+        # }
+        for x in range(500):
+            r = await self.read(_CAM_REG_SENSOR_STATE, dowait=False) # this is the wait function!
+            if r&0x03 == _CAM_REG_SENSOR_STATE_IDLE:
+                break
+            await asyncio.sleep_ms(2)
+         
 
 

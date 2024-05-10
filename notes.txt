@@ -9,7 +9,13 @@ from machine import Pin, SPI
 import binascii
 import os
 
-from cam import *
+from camera import *
+
+ldo2 = Pin(21, Pin.OUT)
+ldo2.value(0)
+spi  = SPI(1, baudrate = 8000000, sck = Pin(36), mosi = Pin(35), miso = Pin(37))
+cs = Pin(7, Pin.OUT)
+cs.value(1)
 
 from camera import Camera
 c = Camera(spi, cs, debug_information=True)

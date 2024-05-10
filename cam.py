@@ -6,6 +6,7 @@ from machine import Pin, SPI
 from arducam.pwr import ArduCamPwr
 from arducam.arducam import ArduCam
 
+
 async def main():
     try:
         spi  = SPI(1, baudrate = 8000000, sck = Pin(36), mosi = Pin(35), miso = Pin(37))

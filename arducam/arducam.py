@@ -46,12 +46,12 @@ _FIFO_SIZE3 = const(0x47)
 # capture mode
 _CAM_SET_CAPTURE_MODE = const(0)
 _CAM_REG_CAPTURE_RESOLUTION = const(0x21)
-_RESOLUTION_320X240 = const(0X01) # CAM_IMAGE_MODE_QVGA
-_RESOLUTION_640X480 = const(0X02) # CAM_IMAGE_MODE_VGA
-_RESOLUTION_800X600 = const(0x03) # CAM_IMAGE_MODE_SVGA
-_RESOLUTION_96X96 = const(0X0a)
-_RESOLUTION_128X128 = const(0X0b)
-_RESOLUTION_320X320 = const(0X0c)
+RESOLUTION_320X240 = const(0X01) # CAM_IMAGE_MODE_QVGA
+RESOLUTION_640X480 = const(0X02) # CAM_IMAGE_MODE_VGA
+RESOLUTION_800X600 = const(0x03) # CAM_IMAGE_MODE_SVGA
+RESOLUTION_96X96 = const(0X0a)
+RESOLUTION_128X128 = const(0X0b)
+RESOLUTION_320X320 = const(0X0c)
 
 # video mode
 _CAM_SET_VIDEO_MODE   = const(0x80)
@@ -60,23 +60,21 @@ _CAM_VIDEO_MODE_1 = const(2) # 640x480
 
 # pixel format
 _CAM_REG_FORMAT = const(0x20)
-_CAM_IMAGE_PIX_FMT_JPG    = const(0x01)
-_CAM_IMAGE_PIX_FMT_RGB565 = const(0x02) # https://rgbcolorpicker.com/565
-_CAM_IMAGE_PIX_FMT_YUV = const(0x03)
+CAM_IMAGE_PIX_FMT_JPG    = const(0x01)
+CAM_IMAGE_PIX_FMT_RGB565 = const(0x02) # https://rgbcolorpicker.com/565
+CAM_IMAGE_PIX_FMT_YUV = const(0x03)
 
 # color
 _CAM_REG_COLOR_EFFECT_CONTROL = const(0x27)
-_SPECIAL_NORMAL = const(0x00)
+SPECIAL_NORMAL = const(0x00)
 
 # brightness
 _CAM_REG_BRIGHTNESS_CONTROL = const(0x22)
-_BRIGHTNESS_DEFAULT = const(0)
-_BRIGHTNESS_PLUS_4 = const(7)
+BRIGHTNESS_DEFAULT = const(0)
 
 # contrast
 _CAM_REG_CONTRAST_CONTROL = const(0x23)
-_CONTRAST_DEFAULT = const(0)
-_CONTRAST_MINUS_3 = const(6)
+CONTRAST_DEFAULT = const(0)
 
 # white balance, gain, exposure
 _CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL = const(0X30)
@@ -91,11 +89,11 @@ _CAM_REG_MANUAL_GAIN_BIT_7_0                = const(0X32)
 _CAM_REG_MANUAL_EXPOSURE_BIT_19_16          = const(0X33)
 _CAM_REG_MANUAL_EXPOSURE_BIT_15_8           = const(0X34)
 _CAM_REG_MANUAL_EXPOSURE_BIT_7_0            = const(0X35)
-_CAM_WHITE_BALANCE_MODE_DEFAULT             = const(0x00) # green?
-_CAM_WHITE_BALANCE_MODE_SUNNY               = const(0x01)
-_CAM_WHITE_BALANCE_MODE_OFFICE              = const(0x02)
-_CAM_WHITE_BALANCE_MODE_CLOUDY              = const(0x03)
-_CAM_WHITE_BALANCE_MODE_HOME                = const(0x04)
+CAM_WHITE_BALANCE_MODE_DEFAULT             = const(0x00) # green?
+CAM_WHITE_BALANCE_MODE_SUNNY               = const(0x01)
+CAM_WHITE_BALANCE_MODE_OFFICE              = const(0x02)
+CAM_WHITE_BALANCE_MODE_CLOUDY              = const(0x03)
+CAM_WHITE_BALANCE_MODE_HOME                = const(0x04)
 
 
 class ArduCam():
@@ -139,6 +137,9 @@ class ArduCam():
                 raise Exception('timed out connecting to ArduCam : 0x{:02X}'.format(r))
             await asyncio.sleep_ms(10)
         print('connected to arducam {}'.format(r))
+        await self.write(_CAM_REG_SENSOR_RESET, _CAM_SENSOR_RESET_ENABLE)
+        await self.write(_CAM_REG_DEBUG_DEVICE_ADDRESS, _CAM_DEVICE_ADDRESS)
+
 
     async def whoami(self):
         r = await self.read(reg = _CAM_REG_SENSOR_ID)
@@ -154,68 +155,64 @@ class ArduCam():
             return b'3MP'
         return r
 
-    async def capture(self):
-
-        # writeReg(camera, CAM_REG_SENSOR_RESET, CAM_SENSOR_RESET_ENABLE);
-        await self.write(_CAM_REG_SENSOR_RESET, _CAM_SENSOR_RESET_ENABLE)
-
-        # writeReg(camera, CAM_REG_DEBUG_DEVICE_ADDRESS, camera->myCameraInfo.deviceAddress);
-        await self.write(_CAM_REG_DEBUG_DEVICE_ADDRESS, _CAM_DEVICE_ADDRESS)
-
-        # writeReg(camera, CAM_REG_CAPTURE_RESOLUTION, CAM_SET_CAPTURE_MODE | mode);
-        # await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_96X96 | _CAM_SET_CAPTURE_MODE)
-        # await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_320X240 | _CAM_SET_CAPTURE_MODE)
-        # await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_640X480 | _CAM_SET_CAPTURE_MODE)
-        await self.write(_CAM_REG_CAPTURE_RESOLUTION, _RESOLUTION_800X600 | _CAM_SET_CAPTURE_MODE)
+    async def configure(self, resolution   = RESOLUTION_800X600,
+                              wb_is_auto   = True,
+                              wb_mode      = CAM_WHITE_BALANCE_MODE_HOME,
+                              agc_is_auto  = False,
+                              agc          = 10,
+                              exposure_is_auto = False,
+                              exposure     = 1200,
+                              color        = SPECIAL_NORMAL,
+                              brightness   = BRIGHTNESS_DEFAULT,
+                              contrast     = CONTRAST_DEFAULT,
+                              pixel_format = CAM_IMAGE_PIX_FMT_JPG,
+                              ):
+        await self.write(_CAM_REG_CAPTURE_RESOLUTION, resolution | _CAM_SET_CAPTURE_MODE)
 
         # white balance
-        await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_ON | _SET_WHILEBALANCE)
-        await self.write(_CAM_REG_WHILEBALANCE_MODE_CONTROL, _CAM_WHITE_BALANCE_MODE_HOME)
+        if wb_is_auto:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_ON | _SET_WHILEBALANCE)
+            await self.write(_CAM_REG_WHILEBALANCE_MODE_CONTROL, wb_mode)
+        else:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_OFF | _SET_WHILEBALANCE)
 
         # AGC (ISO GAIN)
-        await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_OFF  | _SET_GAIN)
-        if self.is_3mp:
-            agc = 10 # 1-31
-            agcs = [0x00, 0x10, 0x18, 0x30, 0x34, 0x38, 0x3b, 0x3f, 0x72, 0x74, 0x76,
-                                        0x78, 0x7a, 0x7c, 0x7e, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6,
-                                        0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff]
-            agc = agcs[agc]
-        await self.write(_CAM_REG_MANUAL_GAIN_BIT_9_8, (agc >> 8)&0xff)
-        await self.write(_CAM_REG_MANUAL_GAIN_BIT_7_0, agc & 0xff)
+        if agc_is_auto:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_ON  | _SET_GAIN)
+        else:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_OFF  | _SET_GAIN)
+            if self.is_3mp:
+                agcs = [0x00, 0x10, 0x18, 0x30, 0x34, 0x38, 0x3b, 0x3f, 0x72, 0x74, 0x76,
+                                            0x78, 0x7a, 0x7c, 0x7e, 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6,
+                                            0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff]
+                agc = agcs[agc]
+            await self.write(_CAM_REG_MANUAL_GAIN_BIT_9_8, (agc >> 8)&0xff)
+            await self.write(_CAM_REG_MANUAL_GAIN_BIT_7_0, agc & 0xff)
 
         # exposure 100~1400
-        await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_OFF  | _SET_EXPOSURE)
-        exp = 1200
-        await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_19_16, (exp >> 16)&0xff)
-        await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_15_8, (exp>>8) & 0xff)
-        await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_7_0, exp & 0xff)
+        if exposure_is_auto:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_ON  | _SET_EXPOSURE)
+        else:
+            await self.write(_CAM_REG_EXPOSURE_GAIN_WHILEBALANCE_CONTROL, _SET_AUTO_OFF  | _SET_EXPOSURE)
+            await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_19_16, (exposure >> 16)&0xff)
+            await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_15_8, (exposure>>8) & 0xff)
+            await self.write(_CAM_REG_MANUAL_EXPOSURE_BIT_7_0, exposure & 0xff)
 
         # filter color (special)
-        await self.write(_CAM_REG_COLOR_EFFECT_CONTROL, _SPECIAL_NORMAL)
+        await self.write(_CAM_REG_COLOR_EFFECT_CONTROL, color)
 
         # brightness
-        await self.write(_CAM_REG_BRIGHTNESS_CONTROL, _BRIGHTNESS_DEFAULT)
+        await self.write(_CAM_REG_BRIGHTNESS_CONTROL, brightness)
 
         # contrast
-        await self.write(_CAM_REG_CONTRAST_CONTROL, _CONTRAST_DEFAULT)
+        await self.write(_CAM_REG_CONTRAST_CONTROL, contrast)
 
         # writeReg(camera, CAM_REG_FORMAT, pixel_format); // set the data format
-        # await self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_RGB565)
-        await self.write(_CAM_REG_FORMAT, _CAM_IMAGE_PIX_FMT_JPG)
+        await self.write(_CAM_REG_FORMAT, pixel_format)
 
-
-        # void cameraSetCapture
-        # clear fifo
-        # writeReg(camera, ARDUCHIP_FIFO, FIFO_CLEAR_ID_MASK);
+    async def capture(self):
         await self.write(_ARDUCHIP_FIFO, _FIFO_CLEAR_ID_MASK)
-
-        # start capture
-        # writeReg(camera, ARDUCHIP_FIFO, FIFO_START_MASK);
         await self.write(_ARDUCHIP_FIFO, _FIFO_START_MASK)
-
-        # wait
-        # while (getBit(camera, ARDUCHIP_TRIG, CAP_DONE_MASK) == 0)
-            # ;
         for x in range(30):
             r = await self.read(_ARDUCHIP_TRIG)
             # print('0x{:02X} {}'.format(r, r & _CAP_DONE_MASK))
@@ -223,9 +220,6 @@ class ArduCam():
                 break
             await asyncio.sleep_ms(100)
 
-        # camera->receivedLength = readFifoLength(camera);
-        # camera->totalLength    = camera->receivedLength;
-        # camera->burstFirstFlag = 0;
         read_size = await self.read_fifo_length()
         print('read_size:{}'.format(read_size))
 
@@ -266,13 +260,6 @@ class ArduCam():
             print()
 
     async def read_fifo_length(self):
-        # uint32_t cameraReadFifoLength(ArducamCamera* camera)
-        # uint32_t len1, len2, len3, length = 0;
-        # len1   = readReg(camera, FIFO_SIZE1);
-        # len2   = readReg(camera, FIFO_SIZE2);
-        # len3   = readReg(camera, FIFO_SIZE3);
-        # length = ((len3 << 16) | (len2 << 8) | len1) & 0xffffff;
-        # return length;
         bs = self.scratch[3:7] # read uses lower scratch bytes
         bs[0] = await self.read(_FIFO_SIZE1)
         bs[1] = await self.read(_FIFO_SIZE2)
@@ -281,12 +268,6 @@ class ArduCam():
         return int.from_bytes(bs, 'little')
 
     async def read(self, reg, dowait=True):
-        # tx = bytes([
-            # 0x7f & reg,  # reg
-            # 0x00,         # dummy
-            # 0x00,         # result
-        # ])
-        # rx = bytearray(len(tx))
         rxtx = self.scratch[0:3]
         rxtx[0] = 0x7f & reg
         rxtx[1] = 0
@@ -302,7 +283,6 @@ class ArduCam():
         return r
 
     async def write(self, reg, v):
-        # tx = bytes([0x80 | reg, v])
         tx = self.scratch[:2]
         tx[0] = 0x80 | reg
         tx[1] = v
@@ -314,12 +294,6 @@ class ArduCam():
         await self.waitidle()
 
     async def waitidle(self):
-        # void cameraWaitI2cIdle(ArducamCamera* camera)
-        # {
-            # while ((readReg(camera, CAM_REG_SENSOR_STATE) & 0X03) != CAM_REG_SENSOR_STATE_IDLE) {
-                # arducamDelayMs(2);
-            # }
-        # }
         for x in range(500):
             r = await self.read(_CAM_REG_SENSOR_STATE, dowait=False) # this is the wait function!
             if r&0x03 == _CAM_REG_SENSOR_STATE_IDLE:

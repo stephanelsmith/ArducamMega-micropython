@@ -3,39 +3,7 @@
 ampy.exe -p COM9 put arducam
 python -m serial.tools.miniterm COM9 115200
 
-
-from time import sleep_ms
-from machine import Pin, SPI
-import binascii
-import os
-
-from camera import *
-
-ldo2 = Pin(21, Pin.OUT)
-ldo2.value(0)
-spi  = SPI(1, baudrate = 8000000, sck = Pin(36), mosi = Pin(35), miso = Pin(37))
-cs = Pin(7, Pin.OUT)
-cs.value(1)
-
-from camera import Camera
-c = Camera(spi, cs, debug_information=True)
-c.resolution = '640x480'
-c.set_brightness_level(c.BRIGHTNESS_PLUS_4)
-c.set_contrast(c.CONTRAST_MINUS_3)
-c.capture_jpg()
-sleep_ms(50)
-c.saveJPG('image.jpg')
-
-
-f = open('image.jpg', 'rb')
-bs = f.read()
-f.close()
-qs = binascii.b2a_base64(bs)
-f = open('image.txt', 'w')
-f.write(qs)
-f.close()
-
-# ampy.exe -p COM9 get image.txt image.txt
-
+make BOARD=SS_CAM
+python -m esptool --chip esp32s2 --port COM7 --baud 921600 write_flash 0x1000 .\firmware.bin
 
 

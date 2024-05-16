@@ -155,7 +155,7 @@ class ArduCam():
             return b'3MP'
         return r
 
-    async def configure(self, resolution   = RESOLUTION_800X600,
+    async def configure(self, resolution   = RESOLUTION_96X96,
                               wb_is_auto   = True,
                               wb_mode      = CAM_WHITE_BALANCE_MODE_HOME,
                               agc_is_auto  = False,
@@ -221,7 +221,7 @@ class ArduCam():
             await asyncio.sleep_ms(100)
 
         read_size = await self.read_fifo_length()
-        print('read_size:{}'.format(read_size))
+        # print('read_size:{}'.format(read_size))
 
         raw = bytearray(read_size)
         mv = memoryview(raw)
@@ -243,6 +243,7 @@ class ArduCam():
         stop_idx += 2
         # print('image {}:{}'.format(start_idx, stop_idx))
         jpg = mv[start_idx:stop_idx]
+        print('jpg:{}'.format(len(jpg)))
         # self.print_bytes(jpg)
         # print(binascii.b2a_base64(jpg).decode()) 
         with open('image.txt', 'w') as f:

@@ -1,9 +1,8 @@
 
 
 ampy.exe -p COM9 put arducam
-python -m serial.tools.miniterm COM9 115200
 
 make BOARD=SS_CAM
 python -m esptool --chip esp32s2 --port COM7 --baud 921600 write_flash 0x1000 .\firmware.bin
-
+python -m serial.tools.miniterm COM10
 

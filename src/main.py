@@ -55,10 +55,10 @@ async def start():
                                   port   = 8883,
                                   en_ssl = True,
                                   ) as sock:
-                async with MQTTCore(socket    = sock,
-                                    client_id = wifi.client_id,
-                                    ) as mqtt:
-                    await asyncio.sleep(10)
+                # async with MQTTCore(socket    = sock,
+                                    # client_id = wifi.client_id,
+                                    # ) as mqtt:
+                await asyncio.sleep(10)
         # await cam_coro()
     finally:
         gc_task.cancel()

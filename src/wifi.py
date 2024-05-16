@@ -41,7 +41,7 @@ AddrInfo = collections.namedtuple('AddrInfo',
     ]
 )
 
-_WIFI_TX_POWER     = const(12) #dBm
+_WIFI_TX_POWER     = const(8) #dBm
 
 class WifiSocket(DebugMixin):
     def __init__(self, ifce     = None,
@@ -457,7 +457,7 @@ class Wifi(DebugMixin):
                         raise Exception('no aps')
                     self.sta.active(True)
                     self.sta.config(txpower = _WIFI_TX_POWER)
-                    self.sta.config(pm=self.sta.PM_POWERSAVE)
+                    # self.sta.config(pm=self.sta.PM_POWERSAVE)
                     await self.connect_knownap(verbose=True)
                     if not self.sta.isconnected():
                         await asyncio.sleep(1)

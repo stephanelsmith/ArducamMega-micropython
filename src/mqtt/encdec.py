@@ -1,7 +1,7 @@
 
 import upydash as _ 
 import random
-from b62 import _BASE62
+from lib.b62 import _BASE62
 from micropython import const
 IS_UPY = 1
 

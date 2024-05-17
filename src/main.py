@@ -48,22 +48,27 @@ async def cam_coro():
 async def start():
     try:
         gc_task = asyncio.create_task(gc_coro())
+        print(2)
         async with Wifi(addr = 0,
                         ) as wifi:
+            use_ssl = False
+            print('a')
+            print(use_ssl, 8883 if use_ssl else 1883)
             async with WifiSocket(ifce   = wifi,
                                   host   = 'broker.hivemq.com',
-                                  port   = 8883,
-                                  en_ssl = True,
+                                  en_ssl = use_ssl,
+                                  port   = 8883 if use_ssl else 1883,
                                   ) as sock:
-                # async with MQTTCore(socket    = sock,
-                                    # client_id = wifi.client_id,
-                                    # ) as mqtt:
-                await asyncio.sleep(10)
+                async with MQTTCore(socket    = sock,
+                                    client_id = wifi.client_id,
+                                    ) as mqtt:
+                    await asyncio.sleep(10)
         # await cam_coro()
     finally:
         gc_task.cancel()
 
 def main():
+    print('main')
     try:
         asyncio.run(start())
     except KeyboardInterrupt:

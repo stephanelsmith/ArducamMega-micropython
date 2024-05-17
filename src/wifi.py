@@ -300,7 +300,7 @@ class WifiSocket(DebugMixin):
                     # write returns None if not successful instead of raising EAGAIN like send
                     r = sock_write(mv[n:idx])
                     if not r: #None or 0
-                        print('tx_coro 2', idx-n)
+                        # print('tx_coro 2', idx-n)
                         await sleep_ms(100)
                     else:
                         n += r

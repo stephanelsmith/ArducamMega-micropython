@@ -9,10 +9,6 @@ except:
 
 import collections
 
-LOBBY_DEVICE_TOKEN = '26931a17-31d2-4ae7-b231-885a1e600a87'
-LOBBY_USERNAME     = 'lby'
-LOBBY_PASSWORD     = '5498f332-3dbd-4aae-8b6c-d3190baa9a96'
-
 QOS_ACKS_TIMEOUT_MS = const(5000)
 KEEP_ALIVE_S        = const(30)
 

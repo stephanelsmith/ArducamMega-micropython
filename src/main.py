@@ -4,6 +4,7 @@ import sys
 import gc
 from machine import Pin, SPI
 import binascii
+from asyncio import Event
 
 from arducam.pwr import ArduCamPwr
 from arducam.arducam import ArduCam
@@ -36,14 +37,15 @@ async def start_cam(publish):
                                ) as arducam:
                 await arducam.configure(resolution = RESOLUTION_96X96,
                                         )
-                for x in range(10):
+                while True:
                     jpg_mv = await arducam.capture()
                     b64 = binascii.b2a_base64(jpg_mv)
-                    print(b64)
+                    print('snap')
+                    # print(b64)
                     await publish(topic = 'sscam/pix',
                                   payload = b64,
                                   )
-                    await asyncio.sleep_ms(3000)
+                    await asyncio.sleep_ms(500)
 
 
     except asyncio.CancelledError:
@@ -82,9 +84,9 @@ async def start():
                                     ) as mqtt:
                     await mqtt.got_connack.wait()
                     rx_task = asyncio.create_task(mqtt_rx_coro(rx_q = mqtt.mqtt_app_rx_q))
-                    await mqtt.subscribe(topics = ['sscam/pix/#'])
+                    await mqtt.subscribe(topics = ['sscam/cmd/#'])
                     cam_task = asyncio.create_task(start_cam(publish = mqtt.publish))
-                    await asyncio.sleep(60)
+                    await Event().wait() # pause
     finally:
         if rx_task:
             rx_task.cancel()

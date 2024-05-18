@@ -2,7 +2,6 @@
 
 import asyncio
 from micropython import const
-import binascii
 
 import time
 from machine import Pin
@@ -242,12 +241,13 @@ class ArduCam():
         stop_idx = raw.find(b'\xff\xd9')  # jpg stop flag
         stop_idx += 2
         # print('image {}:{}'.format(start_idx, stop_idx))
-        jpg = mv[start_idx:stop_idx]
-        print('jpg:{}'.format(len(jpg)))
+
+        jpg_mv = mv[start_idx:stop_idx]
         # self.print_bytes(jpg)
-        # print(binascii.b2a_base64(jpg).decode()) 
-        with open('image.txt', 'w') as f:
-            f.write(binascii.b2a_base64(jpg).decode())
+        return jpg_mv
+
+        # with open('image.txt', 'w') as f:
+            # f.write(binascii.b2a_base64(jpg).decode())
 
     def print_bytes(self, mv):
         stride = 64 

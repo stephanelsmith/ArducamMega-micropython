@@ -46,9 +46,6 @@ class MQTTCore(DebugMixin):
 
         self.tasks = []
 
-        #event for when we receive connack.  context blocks until set
-        self.got_connack = Event()
-
         # list of all transmissions that we are expecting an ack for 
         self.qosacks_table   = []
 
@@ -74,10 +71,13 @@ class MQTTCore(DebugMixin):
         self.watchdog       = Delay_ms(func     = lambda: self.watchdog_event.set(),
                                        duration = self.watchdog_ms)
 
-        # timeout for initial connection ack
-        self.connack_timeout = Event()
-        self.connack_watch   = Delay_ms(func     = lambda: self.connack_timeout.set(),
-                                        duration = 5000)
+        #event for when we receive connack.  context blocks until set
+        self.got_connack = Event()
+
+        # # timeout for initial connection ack
+        # self.connack_timeout = Event()
+        # self.connack_watch   = Delay_ms(func     = lambda: self.connack_timeout.set(),
+                                        # duration = 5000)
 
     def set_client_id(self, client_id):
         self.client_id = client_id
@@ -97,12 +97,22 @@ class MQTTCore(DebugMixin):
 
         self.packet_id_incr = time.ticks_cpu()%65536
 
+        await self.connect()
 
-        await self.connect(username   = self.username,
-                           password   = self.password,
-                           will_topic = self.will_topic,
-                           will_msg   = self.will_msg)
-        self.connack_watch.trigger()
+    async def connect(self):
+        while True:
+            await self.adebug('connecting...')
+            await self._connect(username   = self.username,
+                                password   = self.password,
+                                will_topic = self.will_topic,
+                                will_msg   = self.will_msg)
+            try:
+                await asyncio.wait_for_ms(self.got_connack.wait(), 5000)
+            except asyncio.TimeoutError as err:
+                await self.adebug('connect failed')
+                continue
+            break
+        await self.adebug('connected')
 
     async def stop_tasks(self):
         try:
@@ -128,7 +138,7 @@ class MQTTCore(DebugMixin):
 
             self.watchdog.deinit()
             self.pinger.deinit()
-            self.connack_watch.deinit()
+            # self.connack_watch.deinit()
 
         except asyncio.CancelledError:
             raise
@@ -245,14 +255,17 @@ class MQTTCore(DebugMixin):
                 # self.debug('rx', 'PUBACK', mqtt_struct, self.qosacks_table, mqtt_struct.obj.packet_id)
                 qosack = _.find(self.qosacks_table, lambda qosack: qosack.packet_id == mqtt_struct.obj.packet_id)
                 self.qosacks_table[:] = _.filter(self.qosacks_table, lambda qosack: qosack.packet_id != mqtt_struct.obj.packet_id)
+                qosack.event.set()
             elif mqtt_struct.type == mqtt_defs.SUBACK:
                 self.debug('rx', 'SUBACK', mqtt_struct)
                 qosack = _.find(self.qosacks_table, lambda qosack: qosack.packet_id == mqtt_struct.obj.packet_id)
                 self.qosacks_table[:] = _.filter(self.qosacks_table, lambda qosack: qosack.packet_id != mqtt_struct.obj.packet_id)
+                qosack.event.set()
             elif mqtt_struct.type == mqtt_defs.UNSUBACK:
                 self.debug('rx', 'UNSUBACK', mqtt_struct)
                 qosack = _.find(self.qosacks_table, lambda qosack: qosack.packet_id == mqtt_struct.obj.packet_id)
                 self.qosacks_table[:] = _.filter(self.qosacks_table, lambda qosack: qosack.packet_id != mqtt_struct.obj.packet_id)
+                qosack.event.set()
             elif mqtt_struct.type == mqtt_defs.PINGRESP:
                 self.ping_delay_ms = time.ticks_diff(time.ticks_ms(), self.ping_ticks_start)
                 self.debug('rx', 'PINGRESP', self.ping_delay_ms,'ms')
@@ -290,19 +303,15 @@ class MQTTCore(DebugMixin):
                                       try_count = qosack.try_count + 1,
                                       )
                     if qosack.type == mqtt_defs.SUBSCRIBE:
-                        pass
-                        #todo, missing topics argument
-                        # await subscribe(pkt       = qosack.pkt,
-                                        # packet_id = qosack.packet_id,
-                                        # try_count = qosack.try_count + 1,
-                                        # )
+                        await subscribe(pkt       = qosack.pkt,
+                                        packet_id = qosack.packet_id,
+                                        try_count = qosack.try_count + 1,
+                                        )
                     if qosack.type == mqtt_defs.UNSUBSCRIBE:
-                        pass
-                        #todo, missing topics argument
-                        # await unsubscribe(pkt       = qosack.pkt,
-                                          # packet_id = qosack.packet_id,
-                                          # try_count = qosack.try_count + 1,
-                                          # )
+                        await unsubscribe(pkt       = qosack.pkt,
+                                          packet_id = qosack.packet_id,
+                                          try_count = qosack.try_count + 1,
+                                          )
 
             except asyncio.CancelledError:
                 raise
@@ -342,16 +351,20 @@ class MQTTCore(DebugMixin):
                                                      qos       = qos,
                                                      )
         #pkt = b'0\x13\x00\x06ib0/up\x10\x00\x00\x00\x01\x00\x00\x03\xfe\x00\x11'
-        if qos != 0:
+        if qos > 0:
             #only add to qos ack if we are qos>=1
-            self.qosacks_table.append(mqtt_defs.QOSAckPkt(
+            qosack = mqtt_defs.QOSAck(
                 type      = mqtt_defs.PUBLISH,
                 stamp     = time.ticks_ms(),
                 try_count = try_count,
                 pkt       = pkt,
                 packet_id = packet_id,
-            ))
+                event     = Event(),
+            )
+            self.qosacks_table.append(qosack)
         await self.tx_q.put(pkt) #self.socket.tx_q
+        if qos > 0:
+            return qosack
 
     async def subscribe(self, topics,
                               qoss      = 1,
@@ -369,14 +382,19 @@ class MQTTCore(DebugMixin):
                                                        packet_id = packet_id,
                                                        )
         await self.adebug('tx', 'SUBSCRIBE', topics)
-        self.qosacks_table.append(mqtt_defs.QOSAckPkt(
-            type      = mqtt_defs.SUBSCRIBE,
-            stamp     = time.ticks_ms(),
-            try_count = try_count,
-            pkt       = pkt,
-            packet_id = packet_id,
-        ))
+        if qoss > 0:
+            qosack = mqtt_defs.QOSAck(
+                type      = mqtt_defs.SUBSCRIBE,
+                stamp     = time.ticks_ms(),
+                try_count = try_count,
+                pkt       = pkt,
+                packet_id = packet_id,
+                event     = Event(),
+            )
+            self.qosacks_table.append(qosack)
         await self.tx_q.put(pkt)#, is_priority=True) #self.socket.tx_q
+        if qoss > 0:
+            return qosack
 
     async def unsubscribe(self, topics,
                                 packet_id = None,  #
@@ -392,14 +410,18 @@ class MQTTCore(DebugMixin):
                                                          packet_id = packet_id,
                                                          )
         # await self.adebug('tx', 'UNSUBSCRIBE', topics)
-        self.qosacks_table.append(mqtt_defs.QOSAckPkt(
+        # always get unsuback
+        qosack = mqtt_defs.QOSAck(
             type      = mqtt_defs.UNSUBSCRIBE,
             stamp     = time.ticks_ms(),
             try_count = try_count,
             pkt       = pkt,
             packet_id = packet_id,
-        ))
+            event     = Event(),
+        )
+        self.qosacks_table.append(qosack)
         await self.tx_q.put(pkt)#, is_priority=True) #self.socket.tx_q
+        return qosack
 
     async def puback(self, packet_id):
         pkt = mqtt_encdec.encode_puback(packet_id = packet_id)
@@ -420,20 +442,20 @@ class MQTTCore(DebugMixin):
             self.ping_ticks_start = time.ticks_ms()
             await self.tx_q.put(pkt)#, is_priority=True) #self.socket.tx_q
 
-    async def connect(self, username   = None,
-                            password   = None,
-                            will_topic = None,
-                            will_msg   = None,
-                            ):
+    async def _connect(self, username   = None,
+                             password   = None,
+                             will_topic = None,
+                             will_msg   = None,
+                             ):
         # await self.adebug('CONNECT', 'client_id', type(self.client_id), self.client_id)
         pkt = mqtt_encdec.encode_connect(client_id     = self.client_id,
-                                                 keep_alive    = mqtt_defs.KEEP_ALIVE_S,
-                                                 clean_session = True,
-                                                 username      = username,
-                                                 password      = password,
-                                                 will_topic    = will_topic,
-                                                 will_msg      = will_msg,
-                                                 )
+                                         keep_alive    = mqtt_defs.KEEP_ALIVE_S,
+                                         clean_session = True,
+                                         username      = username,
+                                         password      = password,
+                                         will_topic    = will_topic,
+                                         will_msg      = will_msg,
+                                         )
         await self.adebug('CONNECT')
         self.pinger.trigger()
         await self.tx_q.put(pkt)#, is_priority=True) #self.socket.tx_q

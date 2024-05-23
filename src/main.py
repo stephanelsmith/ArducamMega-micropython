@@ -13,6 +13,7 @@ from arducam.arducam import RESOLUTION_96X96
 
 from wifi import Wifi
 from wifi import WifiSocket
+
 from mqtt.core import MQTTCore
 
 async def gc_coro():
@@ -35,17 +36,18 @@ async def start_cam(publish):
             async with ArduCam(spi = spi,
                                cs  = cs,
                                ) as arducam:
-                await arducam.configure(resolution = RESOLUTION_96X96,
+                await arducam.configure(resolution = RESOLUTION_640X480,
                                         )
                 while True:
                     jpg_mv = await arducam.capture()
                     b64 = binascii.b2a_base64(jpg_mv)
                     print('snap')
-                    # print(b64)
-                    await publish(topic = 'sscam/pix',
-                                  payload = b64,
-                                  )
-                    await asyncio.sleep_ms(500)
+                    qosack = await publish(topic   = 'sscam/pix',
+                                           payload = b64,
+                                           qos     = 1,
+                                           )
+                    print('waiting for puback')
+                    await qosack.event.wait()
 
 
     except asyncio.CancelledError:
@@ -82,7 +84,6 @@ async def start():
                 async with MQTTCore(socket    = sock,
                                     client_id = wifi.client_id,
                                     ) as mqtt:
-                    await mqtt.got_connack.wait()
                     rx_task = asyncio.create_task(mqtt_rx_coro(rx_q = mqtt.mqtt_app_rx_q))
                     await mqtt.subscribe(topics = ['sscam/cmd/#'])
                     cam_task = asyncio.create_task(start_cam(publish = mqtt.publish))

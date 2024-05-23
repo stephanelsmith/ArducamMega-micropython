@@ -28,8 +28,8 @@ PINGREQ     = const(0xc0)
 PINGRESP    = const(0xd0)
 DISCONNECT  = const(0xe0)
 
-QOS_0 = const(0)
-QOS_1 = const(1)
+QOS_0 = const(0) # send only
+QOS_1 = const(1) # receive puback
 QOS_2 = const(2)
 
 class MQTTTaskErr(Exception):
@@ -126,13 +126,14 @@ Mqtt_struct = collections.namedtuple('Mqtt_struct',
 )
 
 #keep track of sent items so we can retry if we don't get an ack
-QOSAckPkt = collections.namedtuple('QOSAckPkt',
+QOSAck = collections.namedtuple('QOSAck',
     [
         'type',
         'stamp',
         'try_count',
         'pkt',
         'packet_id',
+        'event',
     ]
 )
 

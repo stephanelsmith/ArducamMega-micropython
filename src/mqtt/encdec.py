@@ -16,7 +16,7 @@ from . import defs as mqtt_defs
 # PUBLISH -> PUBACK when qos = 1 (packet_id required)
 # PUBLISH -> *qos=2 not implemented*
 # SUBSCRIBE -> SUBACK (packet_id will match the SUBSCRIBE packet_id)
-# UNSUBSCRIBE -> UNSUBACK (packet_id will match the SUBSCRIBE packet_id) 
+# UNSUBSCRIBE -> UNSUBACK (packet_id will match the UNSUBSCRIBE packet_id) 
 # PINGREQ -> PINGRESP
 # DISCONNECT -> *no response*
 

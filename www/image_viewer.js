@@ -27,7 +27,13 @@ Vue.createApp({
             console.log('connected to broker', self.mqtt_uri);
             await self.mqtt_client.subscribeAsync('sscam/pix/#');
 			self.mqtt_client.on('message', function(topic, message){
-                self.b64 = message.toString();
+                // self.b64 = message.toString(); // if sending directly b64
+
+				// if we sent binary instead
+				let b = message.reduce((data, byte)=> {
+					return data + String.fromCharCode(byte);
+				}, '');
+				self.b64 = btoa(b);
 			});
         },
     },

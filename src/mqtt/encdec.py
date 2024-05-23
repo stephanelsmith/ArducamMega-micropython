@@ -208,10 +208,6 @@ def encode_connect(client_id,        # unique Client identifier for the Client (
         if payload:
             if isinstance(payload, str):
                 payload = bytes(payload, 'utf8')
-            elif isinstance(payload, bytes):
-                pass
-            else:
-                payload = bytes(payload)
             r[lc:lc+2] = struct.pack('>H', len(payload))
             lc += 2
             r[lc:lc+len(payload)] = payload
@@ -307,6 +303,7 @@ def encode_publish(topic,     #bytes/str/bytearray,
 #                                                              ||||||||||||||||||||    topic 2 name
 #                                                                                   || topic 2 qos
 ### TODO, FIXED ARRAY SIZE!!!
+# currently not very efficient, but we don't call subscribe in tight loop, diminishing returns
 # @micropython.native
 def encode_subscribe(topic_qoss,       # list of tuple (topic str, qos)
                      packet_id = None, # required, SUBACK will response with packet_id_
@@ -351,6 +348,7 @@ def encode_subscribe(topic_qoss,       # list of tuple (topic str, qos)
 #                    ||||||||||||||||||||||||||||||||    topic 1 name
 #                                                     ||||| topic 2 length
 #                                                           ||||||||||||||||||||    topic 2 name
+# currently not very efficient, but we don't call subscribe in tight loop, diminishing returns
 # @micropython.native
 def encode_unsubscribe(topics,           # list of topics
                        packet_id = None, # required, SUBACK will response with packet_id_

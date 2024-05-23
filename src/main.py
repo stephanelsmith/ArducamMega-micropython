@@ -39,14 +39,15 @@ async def start_cam(publish):
                 await arducam.configure(resolution = RESOLUTION_640X480,
                                         )
                 while True:
+                    print('capture')
                     jpg_mv = await arducam.capture()
                     # b64 = binascii.b2a_base64(jpg_mv)
-                    print('snap')
+                    print('jpg {}kB'.format(len(jpg_mv)//1000))
                     qosack = await publish(topic   = b'sscam/pix',
                                            payload = jpg_mv,
                                            qos     = 1,
                                            )
-                    print('waiting for puback')
+                    print('waiting for puback...')
                     await qosack.event.wait()
 
 

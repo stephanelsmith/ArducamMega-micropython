@@ -105,6 +105,11 @@ class ArduCam():
         # re-use this scratch bytearray to avoid extraneous allocations in read/write functions
         self.scratch  = memoryview(bytearray(8))
 
+        # re-use raw bytearray when reading image, reduce allocations between iterations
+        # make sure we are done with an image before capturing the next
+        # should this be in a context to enforce?
+        self.raw      = bytearray(1024)
+
         self.is_3mp = False
 
     async def start(self, timeout = 2000):
@@ -222,8 +227,11 @@ class ArduCam():
         read_size = await self.read_fifo_length()
         # print('read_size:{}'.format(read_size))
 
-        raw = bytearray(read_size)
-        mv = memoryview(raw)
+        # grow raw array if needed
+        if read_size > len(self.raw):
+            self.raw = bytearray(read_size)
+
+        mv = memoryview(self.raw)
         b_burst_read = bytes([_BURST_FIFO_READ])
         for i in range(0, read_size, _FIFO_BURST_READ_MAX_LENGTH):
             try:
@@ -234,11 +242,11 @@ class ArduCam():
                 self.spi.readinto(mv[i:i+_FIFO_BURST_READ_MAX_LENGTH], 0x00)
             finally:
                 self.cs(1)
-        # print('burst read: {}'.format(len(raw)))
-        # self.print_bytes(raw)
+        # print('burst read: {}'.format(len(self.raw)))
+        # self.print_bytes(self.raw)
 
-        start_idx = raw.find(b'\xff\xd8') # jpg start flag
-        stop_idx = raw.find(b'\xff\xd9')  # jpg stop flag
+        start_idx = self.raw.find(b'\xff\xd8') # jpg start flag
+        stop_idx = self.raw.find(b'\xff\xd9')  # jpg stop flag
         stop_idx += 2
         # print('image {}:{}'.format(start_idx, stop_idx))
 

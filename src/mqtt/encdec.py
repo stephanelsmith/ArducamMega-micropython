@@ -233,8 +233,8 @@ def encode_connect(client_id,        # unique Client identifier for the Client (
 #               ||||||||||||||||||||||||||||||| topic name
 #                                               |||||||||||||||||||||||||||||||| message
 # @micropython.native
-def encode_publish(topic,     #str,
-                   payload,   #bytes/str
+def encode_publish(topic,     #bytes/str/bytearray,
+                   payload,   #bytes/str/bytearray/memoryview
                    dupe      = False,    # is a re-delivery attempt? 0 means first time
                    qos       = 0,        # qos
                    retain    = True,     # message retained for future subscribers
@@ -266,7 +266,10 @@ def encode_publish(topic,     #str,
     offset += 2
 
     #topic
-    r[offset:offset+len(topic)] = bytes(topic, 'utf8')
+    if isinstance(topic, str):
+        r[offset:offset+len(topic)] = bytes(topic, 'utf8')
+    else: #if isinstance(topic, (bytes, bytearray, memoryview))::
+        r[offset:offset+len(topic)] = topic
     offset += len(topic)
 
     #packet_id if qos1
@@ -279,10 +282,10 @@ def encode_publish(topic,     #str,
     #payload
     if isinstance(payload, str):
         r[offset:] = bytes(payload, 'utf8')
-    elif isinstance(payload, bytes):
+    else: #if isinstance(payload, (bytes, bytearray, memoryview)):
         r[offset:] = payload
-    else:
-        raise Exception('publish payload should be bytes/str')
+    # else:
+        # raise Exception('publish payload should be bytes/str')
     return r
 
 
@@ -323,7 +326,10 @@ def encode_subscribe(topic_qoss,       # list of tuple (topic str, qos)
         qos   = topic_qos[1]
         #r += struct.pack('>H', len(topic)) #length of this payload item
         r += len(topic).to_bytes(2,'big')
-        r += bytes(topic, 'utf8')
+        if isinstance(topic, str):
+            r += bytes(topic, 'utf8')
+        else: #if isinstance(topic, (bytes, bytearray, memoryview))::
+            r += topic
         #r += struct.pack('>B', qos) # qos
         r += (qos).to_bytes(1,'big')
 
@@ -362,7 +368,10 @@ def encode_unsubscribe(topics,           # list of topics
     for topic in topics:
         #r += struct.pack('>H', len(topic)) #length of this payload item
         r += len(topic).to_bytes(2,'big')
-        r += bytes(topic, 'utf8')
+        if isinstance(topic, str):
+            r += bytes(topic, 'utf8')
+        else: #if isinstance(topic, (bytes, bytearray, memoryview))::
+            r += topic
 
     #      fixed header    + remaining length                + payload
     return bytes([header]) + encode_remaining_length(len(r)) + r

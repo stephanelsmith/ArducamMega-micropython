@@ -34,7 +34,7 @@ async def gather_wait_for_ms(tasks, timeout_ms=1000):
         raise Exception('GATHER ERRS:'+str(errs))
 
 def byteify_pkt(pkt):
-    if isinstance(pkt, (bytes, bytearray)):
+    if isinstance(pkt, (bytes, bytearray, memoryview)):
         return pkt
     elif isinstance(pkt, uctypes.struct): #ctypes
         return bytes(pkt)

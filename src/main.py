@@ -40,10 +40,10 @@ async def start_cam(publish):
                                         )
                 while True:
                     jpg_mv = await arducam.capture()
-                    b64 = binascii.b2a_base64(jpg_mv)
+                    # b64 = binascii.b2a_base64(jpg_mv)
                     print('snap')
-                    qosack = await publish(topic   = 'sscam/pix',
-                                           payload = b64,
+                    qosack = await publish(topic   = b'sscam/pix',
+                                           payload = jpg_mv,
                                            qos     = 1,
                                            )
                     print('waiting for puback')
@@ -85,7 +85,7 @@ async def start():
                                     client_id = wifi.client_id,
                                     ) as mqtt:
                     rx_task = asyncio.create_task(mqtt_rx_coro(rx_q = mqtt.mqtt_app_rx_q))
-                    await mqtt.subscribe(topics = ['sscam/cmd/#'])
+                    await mqtt.subscribe(topics = [b'sscam/cmd/#'])
                     cam_task = asyncio.create_task(start_cam(publish = mqtt.publish))
                     await Event().wait() # pause
     finally:
